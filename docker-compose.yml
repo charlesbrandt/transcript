@@ -1,0 +1,49 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        UID: ${UID}
+        GID: ${GID}
+    env_file:
+      - .env
+    volumes:
+      - .:/app:cached
+    working_dir: /app
+    # To run a script, use:
+    # docker compose run --rm app python init_project.py <project_name>
+    # Or to get a shell in the container:
+    # docker compose run --rm app /bin/bash
+    command: tail -f /dev/null
+    tty: true
+    stdin_open: true
+    stop_signal: SIGKILL
+    user: "${UID}:${GID}"
+    environment:
+       - PYTHONPATH=/app
+
+  # To run the ASR service locally, uncomment the following section.
+  # whisper:
+  #   image: onerahmet/openai-whisper-asr-webservice:latest-gpu
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [ gpu ]
+  #   restart: unless-stopped
+  #   environment:
+  #     - ASR_ENGINE=whisperx
+  #     - ASR_MODEL=medium
+  #     - HF_TOKEN=YOUR_TOKEN_HERE # Replace with your Hugging Face token if needed
+  #     - MODEL_IDLE_TIMEOUT=60
+  #   ports:
+  #     - "9000:9000"
+  #   volumes:
+  #     - cache-whisper:/root/.cache
+  #   stop_signal: SIGKILL
+
+volumes:
+  # Uncomment the following line if you use the local whisper service
+  cache-whisper:
