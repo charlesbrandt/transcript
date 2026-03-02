@@ -58,7 +58,14 @@ def main():
     print(f"New media file rendered at: {rendered_output_path}")
 
     print(f"\nTo re-run render after editing '{edit_file_path}', use the command:")
-    print(f"docker compose exec app python transcript_editor/editor.py render -m \"{metadata_path}\" --padding 0.5")
+    print(f"docker compose exec app python transcript_editor/editor.py render -m \"{metadata_path}\" --padding 0.5 --diff --keep /path/to/your/keep_file.txt")
+
+    print("""
+Your keep file should contain lines like:
+
+10.5,15.2
+25.0,30.8
+""")
 
     # Extract audio from the video file
     converted_audio_path = Path(rendered_output_path).with_name(f"{Path(rendered_output_path).stem}-converted.wav")

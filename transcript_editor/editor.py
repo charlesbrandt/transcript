@@ -41,7 +41,7 @@ def _get_all_words(metadata: Dict) -> List[Dict]:
                 print(f"Warning: Skipping word due to missing 'start' or 'end' keys in editor: {word_info}")
     return all_words
 
-def _get_aligned_words_and_status(original_words_info: List[Dict], edited_text: str) -> List[Tuple[Dict, str]]:
+def _get_aligned_words_and_status(original_words_info: List[Dict], edited_text: str, keep_ranges: Optional[List[Tuple[float, float]]] = None) -> List[Tuple[Dict, str]]:
     """
     Compares original words with the edited text and determines the status of each word.
     Returns a list of (word_info, status) tuples, where status is 'KEEP' or 'REMOVE'.
@@ -49,7 +49,18 @@ def _get_aligned_words_and_status(original_words_info: List[Dict], edited_text: 
     original_words_text = [w['word'] for w in original_words_info]
     edited_words_text = edited_text.split() # Simple split for now, can be improved with regex tokenization
     
-    matcher = difflib.SequenceMatcher(None, original_words_text, edited_words_text)
+    matcher = difflib.SequenceMatcher(None, original_words_text, edited_words_text, autojunk=False)
+
+    def is_word_in_keep_ranges(word_info: Dict, ranges: List[Tuple[float, float]]) -> bool:
+        if not ranges:
+            return False
+        word_start = word_info['start']
+        word_end = word_info['end']
+        for start, end in ranges:
+            # Check for any overlap
+            if word_start < end and word_end > start:
+                return True
+        return False
     
     aligned_words_status = []
     
@@ -59,12 +70,16 @@ def _get_aligned_words_and_status(original_words_info: List[Dict], edited_text: 
                 aligned_words_status.append((original_words_info[i], 'KEEP'))
         elif opcode == 'delete':
             for i in range(i1, i2):
-                aligned_words_status.append((original_words_info[i], 'REMOVE'))
+                if is_word_in_keep_ranges(original_words_info[i], keep_ranges):
+                    aligned_words_status.append((original_words_info[i], 'KEEP'))
+                else:
+                    aligned_words_status.append((original_words_info[i], 'REMOVE'))
         elif opcode == 'replace':
-            # This case is tricky as it means words were changed.
-            # For now, we'll mark original words as REMOVE as we don't have timing for new words
             for i in range(i1, i2):
-                aligned_words_status.append((original_words_info[i], 'REMOVE'))
+                if is_word_in_keep_ranges(original_words_info[i], keep_ranges):
+                    aligned_words_status.append((original_words_info[i], 'KEEP'))
+                else:
+                    aligned_words_status.append((original_words_info[i], 'REMOVE'))
         elif opcode == 'insert':
             # Insertions in edited text mean new words.
             # We don't have timing info for these, so we ignore them for media manipulation.
@@ -422,6 +437,30 @@ def render(
         raise
 
 
+def parse_keep_file(keep_path: str) -> List[Tuple[float, float]]:
+    """Parses a keep file with time ranges (start,end) on each line."""
+    ranges = []
+    with open(keep_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            parts = line.split(',')
+            if len(parts) != 2:
+                print(f"Warning: Skipping invalid line in keep file: {line}")
+                continue
+            try:
+                start = float(parts[0])
+                end = float(parts[1])
+                if start >= end:
+                    print(f"Warning: Skipping invalid range in keep file (start >= end): {line}")
+                    continue
+                ranges.append((start, end))
+            except ValueError:
+                print(f"Warning: Skipping invalid line in keep file (not a number): {line}")
+    return ranges
+
+
 def get_media_duration(file_path: str) -> Optional[float]:
     """Get the duration of a media file using ffprobe."""
     try:
@@ -555,6 +594,10 @@ Examples:
         '-e', '--edit',
         help='Path to the edited transcript file (auto-detected if not provided)'
     )
+    diff_parser.add_argument(
+        '--keep',
+        help='Path to a file containing time ranges (start,end) to always keep, one per line.'
+    )
     
     # Render command
     render_parser = subparsers.add_parser(
@@ -595,6 +638,10 @@ Examples:
         action='store_true',
         help='Do not automatically convert the rendered audio to a WAV file.'
     )
+    render_parser.add_argument(
+        '--keep',
+        help='Path to a file containing time ranges (start,end) to always keep, one per line.'
+    )
     
     # Retranscribe command
     retranscribe_parser = subparsers.add_parser(
@@ -620,7 +667,7 @@ Examples:
     )
     
     args = parser.parse_args()
-    
+
     if args.command is None:
         parser.print_help()
         return

@@ -26,36 +26,6 @@ A toolkit for transcribing audio/video files and editing them based on their tra
 
 This toolkit requires a connection to a `whisper-asr-webservice` (https://github.com/ahmetoner/whisper-asr-webservice) instance for transcription. You can either connect to a remote service or run one locally using the provided Docker Compose configuration.
 
-### Connecting to a Remote ASR Service
-
-By default, the application is configured to use a remote ASR service. To connect to it, create a `.env` file in the root of the project and add the following line, replacing the URL with the address of your service:
-
-```
-ASR_API_BASE=http://your-remote-asr-service:9000
-```
-
-### Running the ASR Service Locally (with Docker)
-
-If you have a compatible GPU, you can run the ASR service locally. The `docker-compose.yml` file includes a pre-configured `whisper` service using a public, pre-built image.
-
-1.  **Enable the Service**: Uncomment the `whisper` service and the `cache-whisper` volume in the `docker-compose.yml` file.
-
-2.  **Configure the Model**: You can adjust the `ASR_MODEL` and `ASR_ENGINE` in the `environment` section of the `whisper` service. The default is the `medium` model with `whisperx`.
-
-3.  **Hugging Face Token**: If you are using a gated model, you will need to provide your Hugging Face token for the `HF_TOKEN` environment variable.
-
-4.  **Update Environment**: Change your `.env` file to point to the local service:
-    ```
-    ASR_API_BASE=http://localhost:9000
-    ```
-
-5.  **Start Services**: Launch the services using Docker Compose:
-    ```bash
-    docker compose up -d --build
-    ```
-
-For more details on configuring the ASR service, refer to the [official whisper-asr-webservice documentation](https://ahmetoner.github.io/whisper-asr-webservice).
-
 ## Usage
 
 All-in-one-go option: 
@@ -213,3 +183,35 @@ your-media-directory/
 - **Video**: The tool automatically handles video files, preserving both video and audio streams
 - **Large files**: Use `--enable-splitting` for files longer than 30 seconds for better transcription accuracy
 - **Iterative editing**: You can run checkout/diff/render multiple times to refine your edits
+
+## ASR Details
+
+### Connecting to a Remote ASR Service
+
+By default, the application is configured to use a remote ASR service. To connect to it, create a `.env` file in the root of the project and add the following line, replacing the URL with the address of your service:
+
+```
+ASR_API_BASE=http://your-remote-asr-service:9000
+```
+
+### Running the ASR Service Locally (with Docker)
+
+If you have a compatible GPU, you can run the ASR service locally. The `docker-compose.yml` file includes a pre-configured `whisper` service using a public, pre-built image.
+
+1.  **Enable the Service**: Uncomment the `whisper` service and the `cache-whisper` volume in the `docker-compose.yml` file.
+
+2.  **Configure the Model**: You can adjust the `ASR_MODEL` and `ASR_ENGINE` in the `environment` section of the `whisper` service. The default is the `medium` model with `whisperx`.
+
+3.  **Hugging Face Token**: If you are using a gated model, you will need to provide your Hugging Face token for the `HF_TOKEN` environment variable.
+
+4.  **Update Environment**: Change your `.env` file to point to the local service:
+    ```
+    ASR_API_BASE=http://localhost:9000
+    ```
+
+5.  **Start Services**: Launch the services using Docker Compose:
+    ```bash
+    docker compose up -d --build
+    ```
+
+For more details on configuring the ASR service, refer to the [official whisper-asr-webservice documentation](https://ahmetoner.github.io/whisper-asr-webservice).
