@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -40,6 +41,15 @@ def main():
         sys.exit(1)
         
     print(f"Metadata generated at: {metadata_path}")
+
+    # Copy transcript.md to transcript-corrected.md for manual correction
+    transcript_path = os.path.join(os.path.dirname(audio_file_path), f"{audio_basename}-transcript.md")
+    corrected_path = os.path.join(os.path.dirname(audio_file_path), f"{audio_basename}-transcript-corrected.md")
+    if os.path.exists(transcript_path) and not os.path.exists(corrected_path):
+        shutil.copy2(transcript_path, corrected_path)
+        print(f"Correction copy created at: {corrected_path}")
+    elif os.path.exists(corrected_path):
+        print(f"Correction copy already exists, skipping: {corrected_path}")
 
     # Step 2: Checkout the transcript for editing
     print("Step 2/4: Checking out transcript for editing...")
