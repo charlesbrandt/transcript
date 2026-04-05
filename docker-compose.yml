@@ -9,6 +9,7 @@ services:
       - .env
     volumes:
       - .:/app:cached
+      - /media/other:/data:cached
     working_dir: /app
     # To run a script, use:
     # docker compose run --rm app python init_project.py <project_name>
