@@ -79,7 +79,7 @@ Your keep file should contain lines like:
 
     # Extract audio from the video file
     converted_audio_path = Path(rendered_output_path).with_name(f"{Path(rendered_output_path).stem}-converted.wav")
-    print(f'ffmpeg -i "{rendered_output_path}" -vn -acodec pcm_s16le -ar 24000 -ac 1 "{converted_audio_path}"')
+    print(f'ffmpeg -i "{rendered_output_path}" -vn -acodec pcm_s16le -ar 24000 "{converted_audio_path}"')
 
     print("\nScript finished successfully.")
 

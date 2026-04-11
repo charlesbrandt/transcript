@@ -46,7 +46,7 @@ def _get_aligned_words_and_status(original_words_info: List[Dict], edited_text: 
     Compares original words with the edited text and determines the status of each word.
     Returns a list of (word_info, status) tuples, where status is 'KEEP' or 'REMOVE'.
     """
-    original_words_text = [w['word'] for w in original_words_info]
+    original_words_text = [w['word'].strip() for w in original_words_info]
     edited_words_text = edited_text.split() # Simple split for now, can be improved with regex tokenization
     
     matcher = difflib.SequenceMatcher(None, original_words_text, edited_words_text, autojunk=False)
@@ -420,7 +420,7 @@ def render(
             wav_cmd = [
                 "ffmpeg", "-y",
                 "-i", output_path,
-                "-vn", "-acodec", "pcm_s16le", "-ar", "24000", "-ac", "1",
+                "-vn", "-acodec", "pcm_s16le", "-ar", "24000",
                 str(converted_audio_path)
             ]
             print(f"\nConverting to WAV: {converted_audio_path}")
