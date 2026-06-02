@@ -20,3 +20,4 @@ cert.pem
 data
 
 .env
+docker-compose.override.yml
