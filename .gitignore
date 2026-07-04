@@ -21,3 +21,7 @@ data
 
 .env
 docker-compose.override.yml
+
+ui/node_modules/
+ui/dist/
+ui/.svelte-kit/

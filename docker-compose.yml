@@ -1,4 +1,49 @@
 services:
+  api:
+    build:
+      context: .
+      args:
+        UID: ${UID}
+        GID: ${GID}
+    env_file:
+      - .env
+    ports:
+      - "8400:8000"
+    volumes:
+      - .:/app:cached
+    working_dir: /app
+    command: uvicorn api:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+    user: "${UID}:${GID}"
+    environment:
+      - PYTHONPATH=/app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/status')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  ui:
+    build: ./ui
+    ports:
+      - "3006:5173"
+    volumes:
+      - ./ui:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    depends_on:
+      - api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5173"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # Keep the old app service for CLI use
   app:
     build:
       context: .
@@ -10,40 +55,15 @@ services:
     volumes:
       - .:/app:cached
     working_dir: /app
-    # To run a script, use:
-    # docker compose run --rm app python init_project.py <project_name>
-    # Or to get a shell in the container:
-    # docker compose run --rm app /bin/bash
     command: tail -f /dev/null
     tty: true
     stdin_open: true
     stop_signal: SIGKILL
     user: "${UID}:${GID}"
     environment:
-       - PYTHONPATH=/app
-
-  # To run the ASR service locally, uncomment the following section.
-  # whisper:
-  #   image: onerahmet/openai-whisper-asr-webservice:latest-gpu
-  #   deploy:
-  #     resources:
-  #       reservations:
-  #         devices:
-  #           - driver: nvidia
-  #             count: 1
-  #             capabilities: [ gpu ]
-  #   restart: unless-stopped
-  #   environment:
-  #     - ASR_ENGINE=whisperx
-  #     - ASR_MODEL=medium
-  #     - HF_TOKEN=YOUR_TOKEN_HERE # Replace with your Hugging Face token if needed
-  #     - MODEL_IDLE_TIMEOUT=60
-  #   ports:
-  #     - "9000:9000"
-  #   volumes:
-  #     - cache-whisper:/root/.cache
-  #   stop_signal: SIGKILL
+      - PYTHONPATH=/app
+    profiles:
+      - cli
 
 volumes:
-  # Uncomment the following line if you use the local whisper service
   cache-whisper:

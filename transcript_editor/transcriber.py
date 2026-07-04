@@ -197,7 +197,7 @@ def _transcribe_single_chunk(file_path, max_retries=3, backoff_factor=0.5):
         session.close()
 
 
-def upload_file(file_path, update=False, delete_blank=False, enable_splitting=True, chunk_duration=30, chunk_delay_seconds=0.0):
+def upload_file(file_path, update=False, delete_blank=False, enable_splitting=False, chunk_duration=30, chunk_delay_seconds=0.0):
     asr_base = os.getenv("ASR_API_BASE")
     if not asr_base:
         raise ValueError("ASR_API_BASE is not set in the environment variables.")
