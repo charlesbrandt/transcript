@@ -28,9 +28,7 @@ def main():
 
     # Step 1: Transcribe the audio file
     print("Step 1/4: Transcribing audio file...")
-    # upload_file returns the final_metadata dictionary, but the other functions expect a path
-    # So we'll get the metadata path from the audio file path
-    transcriber.upload_file(audio_file_path, update=True)
+    transcriber.upload_file(audio_file_path, update=True, enable_splitting=True, chunk_duration=30)
     
     # Construct the expected metadata path
     audio_basename = Path(audio_file_path).stem

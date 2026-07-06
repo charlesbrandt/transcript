@@ -10,6 +10,42 @@ A toolkit for transcribing audio/video files and editing them based on their tra
 - **Render** new, trimmed media files with configurable padding
 - **Works with any media format** supported by ffmpeg (audio and video)
 
+## Planned: web UI
+
+The CLI workflow (checkout → diff → render → retranscribe) is well-defined and
+stable. The next step is a minimal **FastAPI + Svelte** web service that exposes
+these same four operations over HTTP.
+
+**Architecture: server-side.** Media files and all processing (ffmpeg, ASR) stay
+on the server (GPU machine at 192.168.2.99). The browser is a thin UI — waveform
+playback streamed from the server, text editing, diff display, render progress.
+No file upload from the client; no client-side ffmpeg. This makes the UI usable
+from any device on the local network, including low-powered ones.
+
+The `.edit.md` working file persists on the server between sessions — closing the
+browser and returning resumes where you left off.
+
+**API shape** (wraps existing `editor.py` functions):
+- `GET /session?metadata=<path>` — returns existing `.edit.md` if present, else creates it
+- `POST /diff` — stateless; body carries edit text, returns keep/remove word list + time saved; safe to call on every keystroke
+- `POST /render` — writes `.edit.md`, runs ffmpeg, streams progress via SSE
+- `POST /retranscribe` — re-runs ASR on rendered output
+- `GET /media?path=<path>` — streams audio/video with Range support
+
+**Frontend**: single-view Svelte app — waveform player, timestamped segment
+display with click-to-seek, live diff panel (debounced), render button + progress,
+rendered output player.
+
+Pattern follows `~/repos/say-what` and `~/repos/digger` (single FastAPI file,
+Svelte 4 frontend, Docker Compose, port 8400).
+
+**Integration**: `~/repos/say-what` will deep-link here from `disptch-notes`
+domain results — "refine" button passes `?metadata=<path>` as a query param.
+
+The CLI is not going away — it remains the primary interface for batch/scripted
+use. The web UI is an additional surface for interactive editing of individual
+files, particularly voice notes routed through disptch.
+
 ## Installation
 
 1. Install dependencies:
