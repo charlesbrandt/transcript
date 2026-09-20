@@ -33,7 +33,9 @@ def _get_all_words(metadata: Dict) -> List[Dict]:
     
     all_words = []
     for segment in metadata.get('segments', []):
-        for word_info in segment.get('words', []):
+        # faster_whisper emits "words": null when word_timestamps wasn't requested
+        # (openai_whisper omitted the key), so .get('words', []) can return None.
+        for word_info in segment.get('words') or []:
             # Defensive check: Only append words if they have both 'start' and 'end' keys
             if 'start' in word_info and 'end' in word_info:
                 all_words.append(word_info)
