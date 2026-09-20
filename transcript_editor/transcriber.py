@@ -277,7 +277,9 @@ def upload_file(file_path, update=False, delete_blank=False, enable_splitting=Fa
                         segment["end"] += cumulative_duration
                         
                         # Adjust word timestamps within the segment and filter out words without start/end
-                        if "words" in segment:
+                        # "words" is present-but-null under faster_whisper unless
+                        # word_timestamps=true, so test truthiness, not presence.
+                        if segment.get("words"):
                             valid_words_for_segment = []
                             for word in segment["words"]:
                                 # Only append words that have both 'start' and 'end' for proper timing
