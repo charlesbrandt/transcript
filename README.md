@@ -139,7 +139,7 @@ python transcript_editor/editor.py retranscribe -f path/to/audio-edited.wav
 
 ## Transcription Details
 
-To handle large audio files and improve transcription accuracy, especially with models like Whisper, audio files are automatically split into smaller 30-second chunks locally before being sent to the ASR API. These chunks are converted to a WAV format (PCM signed 16-bit little-endian, 16 kHz sample rate, mono) to ensure compatibility with the ASR API. The chunking process uses a temporary directory to avoid cluttering your local filesystem, and these temporary files are removed after transcription is complete.
+When splitting is enabled, large audio files are divided locally into 30-second chunks before being sent to the ASR API. The lower-level `transcript_editor.transcriber` CLI does **not** enable splitting by default, so pass `--enable-splitting --chunk-duration 30` for meeting-length recordings. The all-in-one `transcript.py` workflow enables 30-second splitting itself. Chunks are converted to WAV (PCM signed 16-bit little-endian, 16 kHz, mono), stored in a temporary directory, and removed after transcription.
 
 ## Command Reference
 
