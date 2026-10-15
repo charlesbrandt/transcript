@@ -13,12 +13,17 @@ import logging
 import subprocess
 import tempfile
 import shutil
+import sys
 import time # Added
 from dotenv import load_dotenv
 from pathlib import Path
 from datetime import datetime
 from requests.adapters import HTTPAdapter # Added
 from urllib3.util.retry import Retry # Added
+
+# Make the transcript_editor package importable when run as a script
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from transcript_editor import diarization
 
 load_dotenv()
 
@@ -197,7 +202,7 @@ def _transcribe_single_chunk(file_path, max_retries=3, backoff_factor=0.5):
         session.close()
 
 
-def upload_file(file_path, update=False, delete_blank=False, enable_splitting=False, chunk_duration=30, chunk_delay_seconds=0.0):
+def upload_file(file_path, update=False, delete_blank=False, enable_splitting=False, chunk_duration=30, chunk_delay_seconds=0.0, diarize=None, min_speakers=None, max_speakers=None):
     asr_base = os.getenv("ASR_API_BASE")
     if not asr_base:
         raise ValueError("ASR_API_BASE is not set in the environment variables.")
@@ -331,6 +336,16 @@ def upload_file(file_path, update=False, delete_blank=False, enable_splitting=Fa
         logging.info(f"Splitting not enabled. Uploading file directly: {file_path}")
         final_metadata = _transcribe_single_chunk(file_path)
 
+    # Optional: label speakers. diarize=None enables it only if DIARIZE_API_BASE is set.
+    if diarize is None:
+        diarize = bool(os.getenv("DIARIZE_API_BASE"))
+    if diarize and final_metadata.get("segments"):
+        num_speakers = diarization.diarize_segments(
+            file_path, final_metadata["segments"], min_speakers=min_speakers, max_speakers=max_speakers
+        )
+        if num_speakers:
+            logging.info(f"Labelled {num_speakers} speakers in {file_path}")
+
     # Ensure 'text' key exists for consistent access
     if "text" not in final_metadata:
         final_metadata["text"] = ""
@@ -363,7 +378,7 @@ def upload_file(file_path, update=False, delete_blank=False, enable_splitting=Fa
     return final_metadata
 
 
-def transcribe_path(source_path, update=False, delete_blanks=False, enable_splitting=False, chunk_duration=30):
+def transcribe_path(source_path, update=False, delete_blanks=False, enable_splitting=False, chunk_duration=30, diarize=None, min_speakers=None, max_speakers=None):
     logging.info(f"Processing in: {source_path}")
     # Convert the input path to a Path object
     path = Path(source_path)
@@ -387,7 +402,10 @@ def transcribe_path(source_path, update=False, delete_blanks=False, enable_split
             update=update,
             delete_blank=delete_blanks,
             enable_splitting=enable_splitting,
-            chunk_duration=chunk_duration
+            chunk_duration=chunk_duration,
+            diarize=diarize,
+            min_speakers=min_speakers,
+            max_speakers=max_speakers,
         )
         logging.info(f"Finished processing for file {current_file_num}/{total_files}: {file_name}")
 
@@ -422,6 +440,15 @@ if __name__ == "__main__":
         default=30,
         help="Duration in seconds for audio chunks when splitting is enabled (default: 30).",
     )
+    parser.add_argument(
+        "--diarize",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Label speakers (A, B, C...) using the diarization sidecar at DIARIZE_API_BASE. "
+        "Default: on only if DIARIZE_API_BASE is set. Failures never stop transcription.",
+    )
+    parser.add_argument("--min-speakers", type=int, help="Hint: minimum number of speakers for diarization.")
+    parser.add_argument("--max-speakers", type=int, help="Hint: maximum number of speakers for diarization.")
     args = parser.parse_args()
 
     if args.path:
@@ -449,6 +476,9 @@ if __name__ == "__main__":
             delete_blank=args.delete_blanks,
             enable_splitting=args.enable_splitting,
             chunk_duration=args.chunk_duration,
+            diarize=args.diarize,
+            min_speakers=args.min_speakers,
+            max_speakers=args.max_speakers,
         )
     elif args.path:
         if args.recursive:
@@ -459,6 +489,9 @@ if __name__ == "__main__":
                     delete_blanks=args.delete_blanks,
                     enable_splitting=args.enable_splitting,
                     chunk_duration=args.chunk_duration,
+                    diarize=args.diarize,
+                    min_speakers=args.min_speakers,
+                    max_speakers=args.max_speakers,
                 )
         else:
             transcribe_path(
@@ -467,4 +500,7 @@ if __name__ == "__main__":
                 delete_blanks=args.delete_blanks,
                 enable_splitting=args.enable_splitting,
                 chunk_duration=args.chunk_duration,
+                diarize=args.diarize,
+                min_speakers=args.min_speakers,
+                max_speakers=args.max_speakers,
             )

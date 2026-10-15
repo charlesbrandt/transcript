@@ -26,6 +26,7 @@
       on:click={() => dispatch('seek', seg.start)}
     >
       <span class="ts">{fmt(seg.start)}</span>
+      {#if seg.speaker}<span class="spk">{seg.speaker}</span>{/if}
       <span class="text">{seg.text}</span>
     </button>
   {/each}
@@ -64,5 +65,13 @@
     padding-top: 1px;
   }
   .seg.active .ts { color: #4a9eff; opacity: 0.7; }
+  .spk {
+    font-family: monospace;
+    font-size: 0.75rem;
+    font-weight: bold;
+    color: #c9a227;
+    flex-shrink: 0;
+    padding-top: 1px;
+  }
   .text { flex: 1; }
 </style>

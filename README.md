@@ -137,6 +137,19 @@ After rendering, you can generate a fresh transcript with accurate timestamps fo
 python transcript_editor/editor.py retranscribe -f path/to/audio-edited.wav
 ```
 
+## Speaker Diarization (optional)
+
+Transcripts can be labelled with speakers using a pyannote diarization sidecar (`POST /diarize`). It is off unless enabled, and when enabled it never blocks transcription: if the sidecar is unreachable or errors, a warning is logged and the transcript is written without speakers.
+
+```bash
+export DIARIZE_API_BASE="http://your-diarize-service:9003"   # or put it in .env
+python -m transcript_editor.transcriber -f meeting.wav --enable-splitting --diarize
+```
+
+- `--diarize` / `--no-diarize` overrides the default, which is on only when `DIARIZE_API_BASE` is set. `--min-speakers` / `--max-speakers` pass hints to the sidecar.
+- The whole file is diarized once (not per chunk, so labels stay consistent), then each word of the stitched transcript gets the speaker whose turn overlaps it most.
+- Speakers are generic labels `A`, `B`, `C`... in order of first appearance. In `*-metadata.json` each word and each segment gets a `speaker` field (a segment's speaker is the majority of its words). The `.edit.md` workflow ignores it; the web UI shows it next to each segment.
+
 ## Transcription Details
 
 When splitting is enabled, large audio files are divided locally into 30-second chunks before being sent to the ASR API. The lower-level `transcript_editor.transcriber` CLI does **not** enable splitting by default, so pass `--enable-splitting --chunk-duration 30` for meeting-length recordings. The all-in-one `transcript.py` workflow enables 30-second splitting itself. Chunks are converted to WAV (PCM signed 16-bit little-endian, 16 kHz, mono), stored in a temporary directory, and removed after transcription.

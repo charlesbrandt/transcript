@@ -45,11 +45,14 @@ def _segments_from_metadata(metadata: dict) -> list[dict]:
         text = seg.get("text", "").strip()
         if not text:
             continue
-        segments.append({
+        segment = {
             "start": seg.get("start", 0),
             "end": seg.get("end", 0),
             "text": text,
-        })
+        }
+        if seg.get("speaker"):
+            segment["speaker"] = seg["speaker"]
+        segments.append(segment)
     return segments
 
 
