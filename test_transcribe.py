@@ -1,3 +1,4 @@
+import os
 import requests
 import json
 import subprocess
@@ -16,7 +17,7 @@ with open("/tmp/clip.wav", "rb") as f:
     data = f.read()
 
 resp = requests.post(
-    "http://your-host:9000/asr",
+    os.environ.get("ASR_API_BASE", "http://localhost:9000") + "/asr",
     params={"encode": "true", "task": "transcribe", "language": "en", "output": "json"},
     files={"audio_file": ("clip.wav", data, "application/octet-stream")},
     timeout=120

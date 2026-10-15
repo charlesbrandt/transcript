@@ -1,12 +1,12 @@
 ---
 name: transcript
-description: Get oriented with the transcript project — FastAPI + Svelte web UI for transcript editing and audio re-rendering; runs on GPU machine (your-host); API on :8400, frontend on :3006
+description: Get oriented with the transcript project — FastAPI + Svelte web UI for transcript editing and audio re-rendering; runs as Docker Compose services on a GPU host; API on :8400, frontend on :3006; optional speaker diarization
 ---
 
 # Transcript — Project Orientation
 
-**Repo:** `~/repos/transcript`
-**CWD when this skill runs:** `/home/user/repos/transcript`
+**Repo:** the checkout this skill lives in (`.claude/skills/transcript/`)
+**Local details:** host names, addresses and mount paths are deliberately not in this file. If `.claude/skills/transcript/LOCAL.md` exists (gitignored), read it for this machine's deployment details.
 
 ## What it is
 
@@ -18,21 +18,18 @@ A toolkit for editing media files by manipulating their transcripts. The CLI (`e
 3. **render** — ffmpeg re-renders the media keeping only the specified words (with padding)
 4. **retranscribe** — re-runs ASR on the rendered output for fresh timestamps
 
-## Deployment (GPU machine — your-host)
+## Deployment
 
-- **API:** `http://your-host:8400` (FastAPI + uvicorn)
-- **Frontend:** `http://your-host:3006` (Svelte 4 + Vite dev server)
-- Repo cloned at `~/repos/transcript/` on GPU machine
+- **API:** `http://<host>:8400` (FastAPI + uvicorn)
+- **Frontend:** `http://<host>:3006` (Svelte 4 + Vite dev server)
+- `<host>` is the machine running the compose stack (a GPU box with the ASR service nearby)
 
 To deploy after pushing changes:
 ```bash
-ssh user@your-host "cd ~/repos/transcript && git pull && docker compose up -d --build api ui"
+ssh <user>@<host> "cd <repo-path> && git pull && docker compose up -d --build api ui"
 ```
 
-**Note:** The GPU machine may have uncommitted local changes. If `git pull` fails:
-```bash
-ssh user@your-host "cd ~/repos/transcript && git stash && git pull && docker compose up -d --build api ui"
-```
+**Note:** The deploy host may have uncommitted local changes. If `git pull` fails, `git stash` first.
 
 ## Stack
 
@@ -58,7 +55,7 @@ GET  /media?path=<abs-path>          stream audio/video with Range support
 
 ## Frontend usage
 
-Open `http://your-host:3006/?metadata=/absolute/path/to/file-metadata.json`
+Open `http://<host>:3006/?metadata=/absolute/path/to/file-metadata.json`
 
 Or type the metadata path into the text input and click Load. The `?metadata=` query param is set in the URL after loading, so the browser tab can be bookmarked/shared.
 
@@ -71,12 +68,13 @@ transcript/
 ├── api.py                          # FastAPI app (all endpoints)
 ├── Dockerfile                      # Python 3.10-slim + ffmpeg + uv
 ├── docker-compose.yml              # api + ui services; app as --profile cli
-├── docker-compose.override.yml     # host volume mounts (gitignored):
-│                                   #   /path/to/media-a:/data, /path/to/media-b:/memory
+├── docker-compose.override.yml     # host volume mounts (gitignored), e.g.
+│                                   #   /path/to/media:/data
 ├── requirements.txt                # fastapi, uvicorn[standard], python-multipart, requests
 ├── transcript_editor/
 │   ├── editor.py                   # checkout, diff, render, retranscribe functions
-│   └── transcriber.py              # ASR upload / chunking
+│   ├── transcriber.py              # ASR upload / chunking (the only transcriber module)
+│   └── diarization.py              # optional speaker labelling via a diarize sidecar
 └── ui/
     ├── src/
     │   ├── App.svelte              # single-view app; session load, edit, render flow
@@ -89,18 +87,17 @@ transcript/
     └── Dockerfile                  # node:20-slim; npm install + npm run dev
 ```
 
-## Volume mounts (override file on GPU machine)
+## Volume mounts (override file on the deploy host)
 
-Media files on the GPU machine are accessed via these mounts in `docker-compose.override.yml`:
-- `/path/to/media-a:/data:cached`
-- `/path/to/media-b:/memory:cached`
+Media directories are mounted into the `api` container in a gitignored `docker-compose.override.yml`, e.g. `/path/on/host:/data:cached`.
 
-Metadata paths passed to `GET /session` must be absolute paths **inside the container** (i.e. starting with `/data/` or `/memory/`, not host paths like `/path/to/media-a/`).
+Metadata paths passed to `GET /session` must be absolute paths **inside the container** (e.g. starting with `/data/`), not host paths.
 
 ## Environment variables (`.env`)
 
 ```
-ASR_API_BASE=http://your-host:9000   # whisper-asr endpoint
+ASR_API_BASE=http://<asr-host>:9000     # whisper-asr endpoint
+DIARIZE_API_BASE=http://<diarize-host>:9003   # optional: pyannote diarize sidecar; enables speaker labels
 UID=1000
 GID=1000
 ```
@@ -109,12 +106,26 @@ GID=1000
 
 **UI shows "unhealthy" in `docker ps`:** The healthcheck uses `wget` which isn't in the node:slim image. Functionally working — same situation as digger.
 
-**`/session` returns 404:** The metadata path must be an absolute path inside the container. If the file is at `/path/to/media-a/foo-metadata.json` on the host, pass `/data/foo-metadata.json`.
+**`/session` returns 404:** The metadata path must be an absolute path inside the container. If the file is `<host-dir>/foo-metadata.json` on the host and `<host-dir>` is mounted at `/data`, pass `/data/foo-metadata.json`.
 
 **Render hangs:** ffmpeg is running in `asyncio.to_thread`. Check API logs: `docker compose logs -f api`.
 
 **Containers not running:**
 ```bash
-ssh user@your-host "docker ps | grep transcript"
-ssh user@your-host "docker compose -f ~/repos/transcript/docker-compose.yml logs --tail=50 api"
+ssh <user>@<host> "docker ps | grep transcript"
+ssh <user>@<host> "docker compose -f <repo-path>/docker-compose.yml logs --tail=50 api"
 ```
+
+## Speaker diarization (optional)
+
+Off unless enabled. Set `DIARIZE_API_BASE` (or pass `--diarize`) and the transcriber sends the whole file once to a pyannote sidecar (`POST /diarize`), then gives each word the speaker whose turn overlaps it most. Labels are generic `A`, `B`, `C`... in order of first appearance, stored as a `speaker` field on every word and segment in `*-metadata.json`; the web UI shows the segment speaker next to each segment.
+
+```bash
+python -m transcript_editor.transcriber -f meeting.wav --enable-splitting --diarize [--min-speakers 2 --max-speakers 6]
+```
+
+- Diarization is one pass over the full file, never per chunk, so labels stay consistent when `--enable-splitting` is on.
+- It never blocks transcription: if the sidecar is unset, unreachable or errors, a warning is logged and the transcript is written without speakers.
+- The `.edit.md` workflow ignores speakers (it is word-diffed); the code is in `transcript_editor/diarization.py`, tests in `test_diarization.py`.
+- Speaker labels are anonymous. Mapping them to real names is outside this project.
+- Segment boundaries depend on the ASR service version; re-baseline anything keyed to old segment timings after upgrading it.

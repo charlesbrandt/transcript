@@ -17,7 +17,7 @@ stable. The next step is a minimal **FastAPI + Svelte** web service that exposes
 these same four operations over HTTP.
 
 **Architecture: server-side.** Media files and all processing (ffmpeg, ASR) stay
-on the server (GPU machine at your-host). The browser is a thin UI — waveform
+on the server (a GPU host). The browser is a thin UI — waveform
 playback streamed from the server, text editing, diff display, render progress.
 No file upload from the client; no client-side ffmpeg. This makes the UI usable
 from any device on the local network, including low-powered ones.
