@@ -136,6 +136,40 @@ def fetch_turns(file_path, diarize_base=None, min_speakers=None, max_speakers=No
     return None
 
 
+def _timestamp(seconds):
+    seconds = int(seconds)
+    return f"{seconds // 3600:02d}:{seconds % 3600 // 60:02d}:{seconds % 60:02d}"
+
+
+def speaker_transcript(segments):
+    """
+    Returns a readable Markdown transcript with one paragraph per speaker turn,
+    e.g. "**A** (00:00:02): Hello there.", joining consecutive segments by the same speaker.
+    Returns "" if no segment has a speaker.
+    """
+    turns = []
+    for segment in sorted(segments, key=lambda s: s.get("start", 0)):
+        text = (segment.get("text") or "").strip()
+        speaker = segment.get("speaker")
+        if not text or not speaker:
+            continue
+        if turns and turns[-1]["speaker"] == speaker:
+            turns[-1]["text"].append(text)
+        else:
+            turns.append({"speaker": speaker, "start": segment.get("start", 0), "text": [text]})
+    return "\n\n".join(f"**{t['speaker']}** ({_timestamp(t['start'])}): {' '.join(t['text'])}" for t in turns) + "\n" if turns else ""
+
+
+def write_speaker_transcript(segments, path):
+    """Writes speaker_transcript(segments) to path. Returns False (writing nothing) if there are no speakers."""
+    text = speaker_transcript(segments)
+    if not text:
+        return False
+    with open(path, "w") as f:
+        f.write(text)
+    return True
+
+
 def diarize_segments(file_path, segments, diarize_base=None, min_speakers=None, max_speakers=None):
     """
     Diarizes file_path once and adds 'speaker' to segments and their words (in place).
@@ -150,3 +184,23 @@ def diarize_segments(file_path, segments, diarize_base=None, min_speakers=None, 
     except Exception as e:
         logging.warning(f"Diarization failed for {file_path}, continuing without speakers: {e}")
         return 0
+
+
+if __name__ == "__main__":
+    import argparse
+    import json
+
+    parser = argparse.ArgumentParser(
+        description="Write <stem>-transcript-speakers.md beside an already diarized <stem>-metadata.json."
+    )
+    parser.add_argument("metadata", help="path to a *-metadata.json file with speaker labels")
+    args = parser.parse_args()
+
+    with open(args.metadata) as f:
+        segments = json.load(f).get("segments") or []
+    stem = args.metadata[: -len("-metadata.json")] if args.metadata.endswith("-metadata.json") else os.path.splitext(args.metadata)[0]
+    out_path = f"{stem}-transcript-speakers.md"
+    if write_speaker_transcript(segments, out_path):
+        print(f"Saved speaker transcript: {out_path}")
+    else:
+        raise SystemExit(f"No speaker labels in {args.metadata}; nothing written.")

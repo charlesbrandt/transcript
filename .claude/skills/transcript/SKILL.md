@@ -127,5 +127,7 @@ python -m transcript_editor.transcriber -f meeting.wav --enable-splitting --diar
 - Diarization is one pass over the full file, never per chunk, so labels stay consistent when `--enable-splitting` is on.
 - It never blocks transcription: if the sidecar is unset, unreachable or errors, a warning is logged and the transcript is written without speakers.
 - The `.edit.md` workflow ignores speakers (it is word-diffed); the code is in `transcript_editor/diarization.py`, tests in `test_diarization.py`.
+- With speakers, it also writes `<stem>-transcript-speakers.md` (one `**A** (hh:mm:ss): ...` paragraph per turn); regenerate it from existing metadata with `python -m transcript_editor.diarization <stem>-metadata.json`.
+- The console prints whether speakers were labelled; the reason for any failure is in `processing.log` beside the recording.
 - Speaker labels are anonymous. Mapping them to real names is outside this project.
 - Segment boundaries depend on the ASR service version; re-baseline anything keyed to old segment timings after upgrading it.

@@ -149,6 +149,8 @@ python -m transcript_editor.transcriber -f meeting.wav --enable-splitting --diar
 - `--diarize` / `--no-diarize` overrides the default, which is on only when `DIARIZE_API_BASE` is set. `--min-speakers` / `--max-speakers` pass hints to the sidecar.
 - The whole file is diarized once (not per chunk, so labels stay consistent), then each word of the stitched transcript gets the speaker whose turn overlaps it most.
 - Speakers are generic labels `A`, `B`, `C`... in order of first appearance. In `*-metadata.json` each word and each segment gets a `speaker` field (a segment's speaker is the majority of its words). The `.edit.md` workflow ignores it; the web UI shows it next to each segment.
+- With speakers, the transcriber also writes `<stem>-transcript-speakers.md`: one paragraph per speaker turn, such as `**A** (00:00:02): Hello there.` The plain `-transcript.md` is unchanged. To write it for an existing diarized metadata file, run `python -m transcript_editor.diarization <stem>-metadata.json`.
+- The console says whether diarization labelled speakers; details and any failure reason go to `processing.log` beside the recording.
 
 ## Transcription Details
 

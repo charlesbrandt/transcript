@@ -96,6 +96,28 @@ def test_missing_base_url_never_raises():
         assert diarization.diarize_segments("/tmp/x.wav", segments) == 0
 
 
+def test_speaker_transcript_joins_consecutive_turns():
+    segments = [
+        {"start": 2.0, "end": 3.0, "text": " Hey, Charles.", "speaker": "A"},
+        {"start": 4.0, "end": 5.0, "text": "Hey.", "speaker": "B"},
+        {"start": 5.0, "end": 6.0, "text": "Good afternoon. ", "speaker": "B"},
+        {"start": 3725.0, "end": 3726.0, "text": "Bye.", "speaker": "A"},
+    ]
+    assert diarization.speaker_transcript(segments) == (
+        "**A** (00:00:02): Hey, Charles.\n\n"
+        "**B** (00:00:04): Hey. Good afternoon.\n\n"
+        "**A** (01:02:05): Bye.\n"
+    )
+
+
+def test_speaker_transcript_without_speakers_writes_nothing():
+    import os, tempfile
+    path = os.path.join(tempfile.mkdtemp(), "x-transcript-speakers.md")
+    assert diarization.speaker_transcript([{"start": 0, "end": 1, "text": "hi"}]) == ""
+    assert diarization.write_speaker_transcript([{"start": 0, "end": 1, "text": "hi"}], path) is False
+    assert not os.path.exists(path)
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

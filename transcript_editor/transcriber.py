@@ -219,6 +219,7 @@ def upload_file(file_path, update=False, delete_blank=False, enable_splitting=Fa
     json_path = os.path.join(source_path, json_filename)
     md_filename = f"{source_basename_no_ext}-transcript.md"
     md_path = os.path.join(source_path, md_filename)
+    speakers_path = os.path.join(source_path, f"{source_basename_no_ext}-transcript-speakers.md")
     if len(json_path) > 255:  
         # If the path is too long, truncate it
         json_path = os.path.join(source_path, f"{source_basename_no_ext[0:230]}-metadata.json")
@@ -227,6 +228,8 @@ def upload_file(file_path, update=False, delete_blank=False, enable_splitting=Fa
         # If the path is too long, truncate it
         md_path = os.path.join(source_path, f"{source_basename_no_ext[0:230]}-transcript.md")
         logging.warning(f"Markdown Path too long, using shortened path: {md_path}")
+    if len(speakers_path) > 255:
+        speakers_path = os.path.join(source_path, f"{source_basename_no_ext[0:220]}-transcript-speakers.md")
 
     if os.path.exists(json_path) and not update:
         logging.info(f"Metadata file already exists: {json_path}. Skipping.")
@@ -240,6 +243,11 @@ def upload_file(file_path, update=False, delete_blank=False, enable_splitting=Fa
         backup_md_path = _get_next_backup_path(source_path, source_basename_no_ext, "-transcript.md")
         os.rename(md_path, backup_md_path)
         logging.info(f"Moved existing transcript file to: {backup_md_path}")
+
+        if os.path.exists(speakers_path):
+            backup_speakers_path = _get_next_backup_path(source_path, source_basename_no_ext, "-transcript-speakers.md")
+            os.rename(speakers_path, backup_speakers_path)
+            logging.info(f"Moved existing speaker transcript file to: {backup_speakers_path}")
 
     final_metadata = {}
 
@@ -342,11 +350,15 @@ def upload_file(file_path, update=False, delete_blank=False, enable_splitting=Fa
     if diarize is None:
         diarize = bool(os.getenv("DIARIZE_API_BASE"))
     if diarize and final_metadata.get("segments"):
+        print(f"  Diarizing {os.path.basename(file_path)}...") # Console output
         num_speakers = diarization.diarize_segments(
             file_path, final_metadata["segments"], min_speakers=min_speakers, max_speakers=max_speakers
         )
         if num_speakers:
             logging.info(f"Labelled {num_speakers} speakers in {file_path}")
+            print(f"  Labelled {num_speakers} speaker{'s' if num_speakers != 1 else ''}.")
+        else:
+            print("  Diarization produced no speakers; continuing without them (see processing.log).")
 
     # Ensure 'text' key exists for consistent access
     if "text" not in final_metadata:
@@ -376,6 +388,10 @@ def upload_file(file_path, update=False, delete_blank=False, enable_splitting=Fa
             else:
                 logging.warning(f"No segments or text found in metadata for {file_path}")
         logging.info(f"Saved transcript: {md_path}")
+
+        # With speaker labels, also save a transcript with one paragraph per speaker turn
+        if diarization.write_speaker_transcript(final_metadata.get("segments") or [], speakers_path):
+            logging.info(f"Saved speaker transcript: {speakers_path}")
 
     return final_metadata
 
