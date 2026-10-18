@@ -156,8 +156,56 @@ def check_asr_api_health(asr_base=None, timeout=5):
         logging.error(f"health of ASR API at: {asr_base}: Failed to connect: {e}")
         return False
 
+MP4_FAMILY_EXTS = {".m4a", ".mp4", ".m4b", ".mov", ".3gp"}
+
+
+def _has_segments(json_path):
+    """True if json_path is a readable metadata file with at least one segment.
+    A sidecar without segments (e.g. left by an empty ASR response) counts as absent."""
+    try:
+        with open(json_path) as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return False
+    return bool(isinstance(data, dict) and data.get("segments"))
+
+
+def _prepare_for_asr(file_path):
+    """For mp4-family audio, decode to a temp 16 kHz mono wav and return its path
+    (caller deletes it). Returns None if no conversion is needed or ffmpeg fails.
+
+    Phone m4a files have the moov atom after mdat, and whisper-asr answers those
+    with an empty 200 (measured 2026-10-17); wav (or a faststart remux) works.
+    """
+    if os.path.splitext(file_path)[1].lower() not in MP4_FAMILY_EXTS:
+        return None
+    fd, tmp = tempfile.mkstemp(suffix=".wav", prefix="transcript-asr-")
+    os.close(fd)
+    try:
+        subprocess.run(
+            ["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", file_path,
+             "-vn", "-ar", "16000", "-ac", "1", tmp],
+            check=True, capture_output=True,
+        )
+        if os.path.getsize(tmp) > 0:
+            return tmp
+    except (OSError, subprocess.CalledProcessError) as e:
+        logging.warning(f"ffmpeg conversion failed for {file_path}, uploading original: {e}")
+    os.unlink(tmp)
+    return None
+
+
 def _transcribe_single_chunk(file_path, max_retries=3, backoff_factor=0.5):
     """Internal function to upload a single chunk to the ASR API with retries."""
+    prepared = _prepare_for_asr(file_path)
+    try:
+        return _post_to_asr(prepared or file_path, max_retries, backoff_factor)
+    finally:
+        if prepared:
+            os.unlink(prepared)
+
+
+def _post_to_asr(file_path, max_retries=3, backoff_factor=0.5):
     asr_base = os.getenv("ASR_API_BASE")
     if not asr_base:
         raise ValueError("ASR_API_BASE is not set in the environment variables.")
@@ -231,18 +279,21 @@ def upload_file(file_path, update=False, delete_blank=False, enable_splitting=Fa
     if len(speakers_path) > 255:
         speakers_path = os.path.join(source_path, f"{source_basename_no_ext[0:220]}-transcript-speakers.md")
 
-    if os.path.exists(json_path) and not update:
+    # A metadata file without segments (e.g. from an empty ASR response) counts as absent.
+    existing = os.path.exists(json_path) and _has_segments(json_path)
+    if existing and not update:
         logging.info(f"Metadata file already exists: {json_path}. Skipping.")
         return
-    elif os.path.exists(json_path) and update:
+    elif existing and update:
         # Backup existing metadata and transcript files
         backup_json_path = _get_next_backup_path(source_path, source_basename_no_ext, "-metadata.json")
         os.rename(json_path, backup_json_path)
         logging.info(f"Moved existing metadata file to: {backup_json_path}")
 
         backup_md_path = _get_next_backup_path(source_path, source_basename_no_ext, "-transcript.md")
-        os.rename(md_path, backup_md_path)
-        logging.info(f"Moved existing transcript file to: {backup_md_path}")
+        if os.path.exists(md_path):
+            os.rename(md_path, backup_md_path)
+            logging.info(f"Moved existing transcript file to: {backup_md_path}")
 
         if os.path.exists(speakers_path):
             backup_speakers_path = _get_next_backup_path(source_path, source_basename_no_ext, "-transcript-speakers.md")
@@ -364,7 +415,8 @@ def upload_file(file_path, update=False, delete_blank=False, enable_splitting=Fa
     if "text" not in final_metadata:
         final_metadata["text"] = ""
 
-    if delete_blank and not final_metadata["text"].strip():
+    is_blank = not final_metadata["text"].strip() and not final_metadata.get("segments")
+    if is_blank and delete_blank:
         blank_path = os.path.join(source_path, "blanks")
         os.makedirs(blank_path, exist_ok=True)
         json_path = os.path.join(blank_path, json_filename)
@@ -373,6 +425,10 @@ def upload_file(file_path, update=False, delete_blank=False, enable_splitting=Fa
 
         logging.info(f"Blank transcription, deleting audio_file {file_path}")
         os.remove(file_path)
+    elif is_blank:
+        # Never leave an empty sidecar next to the media: it would make later runs
+        # (here and in disptch) skip a file that was never actually transcribed.
+        logging.warning(f"Blank transcription for {file_path}; not writing a sidecar")
     else:
         with open(json_path, "w") as f:
             json.dump(final_metadata, f, indent=4)
@@ -380,13 +436,11 @@ def upload_file(file_path, update=False, delete_blank=False, enable_splitting=Fa
 
         # Save a markdown version of the transcript for quick reference
         with open(md_path, "w") as f:
-            if "segments" in final_metadata:
+            if final_metadata.get("segments"):
                 for segment in final_metadata["segments"]:
                     f.write(f"{segment['text'].strip()}\n")
             elif final_metadata["text"]:
                 f.write(final_metadata["text"].strip() + "\n")
-            else:
-                logging.warning(f"No segments or text found in metadata for {file_path}")
         logging.info(f"Saved transcript: {md_path}")
 
         # With speaker labels, also save a transcript with one paragraph per speaker turn
